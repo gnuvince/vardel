@@ -68,6 +68,13 @@ fn test_encode_u8() {
 }
 
 #[test]
+fn test_encode_fail() {
+    let mut out: [u8; 1] = [0; 1];
+    assert_eq!(Some(1), encode_u8(46, &mut out));
+    assert_eq!(None, encode_u8(150, &mut out));
+}
+
+#[test]
 fn test_encode_u16() {
     let mut out: [u8; 16] = [0; 16];
 
