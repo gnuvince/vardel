@@ -53,6 +53,18 @@ pub fn decode_u32(bytes: &[u8]) -> Result<(u32, &[u8]), Error> {
     return Err(Error::InvalidVarInt);
 }
 
+pub fn contains_u32(target: u32, mut bytes: &[u8]) -> bool {
+    let mut curr: u32 = 0;
+    while let Ok((delta, rest)) = decode_u32(&bytes[..]) {
+        curr += delta;
+        if curr == target {
+            return true;
+        }
+        bytes = rest;
+    }
+    return false;
+}
+
 make_encoder!(encode_u8, u8);
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
