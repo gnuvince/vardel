@@ -1,6 +1,27 @@
+use std::fmt;
+use std::error;
+
+#[derive(Debug)]
+pub enum Error {
+    BufferTooSmall,
+    InvalidVarInt,
+}
+
+impl error::Error for Error {
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::BufferTooSmall => write!(f, "output buffer is too small"),
+            Error::InvalidVarInt => write!(f, "invalid var int: no terminator byte found"),
+        }
+    }
+}
+
 macro_rules! make_encoder {
     ($func_name:ident, $ty:ty) => {
-        pub fn $func_name(mut x: $ty, out: &mut [u8]) -> Option<usize> {
+        pub fn $func_name(mut x: $ty, out: &mut [u8]) -> Result<usize, Error> {
             for (i, byte) in out.iter_mut().enumerate() {
                 // All bytes have MSB == 1...
                 *byte = (x & 0x7f) as u8 | 0x80;
@@ -8,22 +29,22 @@ macro_rules! make_encoder {
                 if x == 0 {
                     // ... except the last byte where MSB == 0.
                     *byte &= 0x7f;
-                    return Some(i+1);
+                    return Ok(i+1);
                 }
             }
-            return None;
+            return Err(Error::BufferTooSmall);
         }
     };
 }
 
 macro_rules! make_slice_encoder {
     ($func_name:ident, $single_encoder:ident, $ty:ty) => {
-        pub fn $func_name(xs: &[$ty]) -> Option<Vec<u8>> {
+        pub fn $func_name(xs: &[$ty]) -> Result<Vec<u8>, Error> {
             let mut out: Vec<u8> = Vec::new();
             let mut buf: [u8; 16] = [0; 16];
 
             if xs.is_empty() {
-                return Some(out);
+                return Ok(out);
             }
 
             let mut prev = xs[0];
@@ -37,7 +58,7 @@ macro_rules! make_slice_encoder {
                 prev = *x;
             }
 
-            return Some(out);
+            return Ok(out);
         }
     };
 }
@@ -80,12 +101,12 @@ fn test_encode_u8() {
     let mut out: [u8; 16] = [0; 16];
 
     for i in 0_u8 ..= 127_u8 {
-        assert_eq!(Some(1), encode_u8(i, &mut out[..]));
+        assert!(matches!(encode_u8(i, &mut out[..]), Ok(1)));
         assert_eq!(&[i], &out[0..1]);
     }
 
     for i in 128_u8 ..= 255_u8 {
-        assert_eq!(Some(2), encode_u8(i, &mut out[..]));
+        assert!(matches!(encode_u8(i, &mut out[..]), Ok(2)));
         assert_eq!(&[i | (1 << 7), 1], &out[0..2]);
     }
 }
@@ -93,8 +114,8 @@ fn test_encode_u8() {
 #[test]
 fn test_encode_fail() {
     let mut out: [u8; 1] = [0; 1];
-    assert_eq!(Some(1), encode_u8(46, &mut out));
-    assert_eq!(None, encode_u8(150, &mut out));
+    assert!(matches!(encode_u8(46, &mut out), Ok(1)));
+    assert!(matches!(encode_u8(150, &mut out), Err(Error::BufferTooSmall)));
 }
 
 #[test]
@@ -102,16 +123,16 @@ fn test_encode_u16() {
     let mut out: [u8; 16] = [0; 16];
 
     for i in 0_u16 ..= 127_u16 {
-        assert_eq!(Some(1), encode_u16(i, &mut out[..]));
+        assert!(matches!(encode_u16(i, &mut out[..]), Ok(1)));
         assert_eq!(&[i as u8], &out[0..1]);
     }
 
     for i in 128_u16 ..= 16383_u16 {
-        assert_eq!(Some(2), encode_u16(i, &mut out[..]));
+        assert!(matches!(encode_u16(i, &mut out[..]), Ok(2)));
     }
 
     for i in 16384_u16 ..= 65535_u16 {
-        assert_eq!(Some(3), encode_u16(i, &mut out[..]));
+        assert!(matches!(encode_u16(i, &mut out[..]), Ok(3)));
     }
 }
 
@@ -120,14 +141,14 @@ fn test_encode_u32() {
     let mut out: [u8; 16] = [0; 16];
 
     for i in 0_u32 ..= 127_u32 {
-        assert_eq!(Some(1), encode_u32(i, &mut out[..]));
+        assert!(matches!(encode_u32(i, &mut out[..]), Ok(1)));
         assert_eq!(&[i as u8], &out[0..1]);
     }
 
-    assert_eq!(Some(2), encode_u32(150, &mut out[..]));
+    assert!(matches!(encode_u32(150, &mut out[..]), Ok(2)));
     assert_eq!(&[0x96, 0x01], &out[0..2]);
 
-    assert_eq!(Some(2), encode_u32(300, &mut out[..]));
+    assert!(matches!(encode_u32(300, &mut out[..]), Ok(2)));
     assert_eq!(&[0xac, 0x02], &out[0..2]);
 }
 
@@ -135,21 +156,59 @@ fn test_encode_u32() {
 #[test]
 fn test_encode_u8_slice() {
     let r = encode_u8_slice(&[]);
-    assert!(r.is_some());
+    assert!(r.is_ok());
     assert!(r.unwrap().is_empty());
 
     let r = encode_u8_slice(&[1, 2, 3]);
-    assert!(r.is_some());
+    assert!(r.is_ok());
     assert_eq!(vec![1, 1, 1], r.unwrap());
 
     let r = encode_u8_slice(&[5, 10, 160]);
-    assert!(r.is_some());
+    assert!(r.is_ok());
     assert_eq!(vec![5, 5, 0x96, 0x01], r.unwrap());
 }
 
 #[test]
 fn test_encode_u32_slice() {
     let r = encode_u32_slice(&[150, 300]);
-    assert!(r.is_some());
+    assert!(r.is_ok());
     assert_eq!(vec![0x96, 0x01, 0x96, 0x01], r.unwrap());
+}
+
+
+#[test]
+fn test_decode_u32() {
+    let bytes = &[0x96, 0x01];
+    if let Ok((x, rest)) = decode_u32(&bytes[..]) {
+        assert_eq!(x, 150);
+        assert!(rest.is_empty());
+    }
+
+    let bytes = &[0x96, 0x01, 0x97, 0x01];
+    if let Ok((x, rest)) = decode_u32(&bytes[..]) {
+        assert_eq!(x, 150);
+        assert!(!rest.is_empty());
+        if let Ok((x, rest)) = decode_u32(&rest[..]) {
+            assert_eq!(x, 151);
+            assert!(rest.is_empty());
+        }
+    }
+}
+
+#[test]
+fn test_contains_u32() {
+    let v = encode_u32_slice(&[4, 8, 15, 16, 23, 42]).unwrap();
+    assert!(contains_u32(4, &v[..]));
+    assert!(contains_u32(8, &v[..]));
+    assert!(contains_u32(15, &v[..]));
+    assert!(contains_u32(16, &v[..]));
+    assert!(contains_u32(23, &v[..]));
+    assert!(contains_u32(42, &v[..]));
+
+    assert!(!contains_u32(5, &v[..]));
+    assert!(!contains_u32(9, &v[..]));
+    assert!(!contains_u32(17, &v[..]));
+    assert!(!contains_u32(18, &v[..]));
+    assert!(!contains_u32(24, &v[..]));
+    assert!(!contains_u32(43, &v[..]));
 }
