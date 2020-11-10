@@ -86,36 +86,20 @@ pub fn contains_u32(target: u32, mut bytes: &[u8]) -> bool {
     return false;
 }
 
-make_encoder!(encode_u8, u8);
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
 make_encoder!(encode_u64, u64);
 
-make_slice_encoder!(encode_u8_slice, encode_u8, u8);
 make_slice_encoder!(encode_u16_slice, encode_u16, u16);
 make_slice_encoder!(encode_u32_slice, encode_u32, u32);
 make_slice_encoder!(encode_u64_slice, encode_u64, u64);
 
-#[test]
-fn test_encode_u8() {
-    let mut out: [u8; 16] = [0; 16];
-
-    for i in 0_u8 ..= 127_u8 {
-        assert!(matches!(encode_u8(i, &mut out[..]), Ok(1)));
-        assert_eq!(&[i], &out[0..1]);
-    }
-
-    for i in 128_u8 ..= 255_u8 {
-        assert!(matches!(encode_u8(i, &mut out[..]), Ok(2)));
-        assert_eq!(&[i | (1 << 7), 1], &out[0..2]);
-    }
-}
 
 #[test]
 fn test_encode_fail() {
     let mut out: [u8; 1] = [0; 1];
-    assert!(matches!(encode_u8(46, &mut out), Ok(1)));
-    assert!(matches!(encode_u8(150, &mut out), Err(Error::BufferTooSmall)));
+    assert!(matches!(encode_u32(46, &mut out), Ok(1)));
+    assert!(matches!(encode_u32(150, &mut out), Err(Error::BufferTooSmall)));
 }
 
 #[test]
@@ -154,27 +138,19 @@ fn test_encode_u32() {
 
 
 #[test]
-fn test_encode_u8_slice() {
-    let r = encode_u8_slice(&[]);
+fn test_encode_u32_slice() {
+    let r = encode_u32_slice(&[]);
     assert!(r.is_ok());
     assert!(r.unwrap().is_empty());
 
-    let r = encode_u8_slice(&[1, 2, 3]);
+    let r = encode_u32_slice(&[1, 2, 3]);
     assert!(r.is_ok());
     assert_eq!(vec![1, 1, 1], r.unwrap());
 
-    let r = encode_u8_slice(&[5, 10, 160]);
+    let r = encode_u32_slice(&[5, 10, 160]);
     assert!(r.is_ok());
     assert_eq!(vec![5, 5, 0x96, 0x01], r.unwrap());
 }
-
-#[test]
-fn test_encode_u32_slice() {
-    let r = encode_u32_slice(&[150, 300]);
-    assert!(r.is_ok());
-    assert_eq!(vec![0x96, 0x01, 0x96, 0x01], r.unwrap());
-}
-
 
 #[test]
 fn test_decode_u32() {
