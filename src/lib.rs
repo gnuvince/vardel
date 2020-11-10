@@ -42,6 +42,17 @@ macro_rules! make_slice_encoder {
     };
 }
 
+pub fn decode_u32(bytes: &[u8]) -> Result<(u32, &[u8]), Error> {
+    let mut x: u32 = 0;
+    for (i, b) in bytes.iter().enumerate() {
+        x |= ((*b & 0x7f) as u32) << (7*i);
+        if *b & 0x80 == 0 {
+            return Ok((x, &bytes[i+1..]));
+        }
+    }
+    return Err(Error::InvalidVarInt);
+}
+
 make_encoder!(encode_u8, u8);
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
