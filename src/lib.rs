@@ -116,12 +116,8 @@ macro_rules! make_delta_slice_encoder {
                 return Ok(total_bytes_written);
             }
 
-            let mut prev = xs[0];
-            let n = $single_encoder(prev, &mut buf)?;
-            w.write(&buf[..n])?;
-            total_bytes_written += n;
-
-            for x in &xs[1..] {
+            let mut prev = 0;
+            for x in xs {
                 let delta = *x - prev;
                 let n = $single_encoder(delta, &mut buf)?;
                 w.write(&buf[..n])?;
