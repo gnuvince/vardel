@@ -106,6 +106,34 @@ macro_rules! make_slice_decoder {
     };
 }
 
+macro_rules! make_delta_slice_encoder {
+    ($func_name:ident, $single_encoder:ident, $ty:ty) => {
+        pub fn $func_name<W: Write>(xs: &[$ty], w: &mut W) -> Result<usize, Error> {
+            let mut buf: [u8; 24] = [0; 24];
+            let mut total_bytes_written: usize = 0;
+
+            if xs.is_empty() {
+                return Ok(total_bytes_written);
+            }
+
+            let mut prev = xs[0];
+            let n = $single_encoder(prev, &mut buf)?;
+            w.write(&buf[..n])?;
+            total_bytes_written += n;
+
+            for x in &xs[1..] {
+                let delta = *x - prev;
+                let n = $single_encoder(delta, &mut buf)?;
+                w.write(&buf[..n])?;
+                total_bytes_written += n;
+                prev = *x;
+            }
+
+            return Ok(total_bytes_written);
+        }
+    };
+}
+
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
 make_encoder!(encode_u64, u64);
@@ -125,6 +153,11 @@ make_slice_decoder!(decode_u16_slice, decode_u16, u16);
 make_slice_decoder!(decode_u32_slice, decode_u32, u32);
 make_slice_decoder!(decode_u64_slice, decode_u64, u64);
 make_slice_decoder!(decode_u128_slice, decode_u128, u128);
+
+make_delta_slice_encoder!(delta_encode_u16_slice, encode_u16, u16);
+make_delta_slice_encoder!(delta_encode_u32_slice, encode_u32, u32);
+make_delta_slice_encoder!(delta_encode_u64_slice, encode_u64, u64);
+make_delta_slice_encoder!(delta_encode_u128_slice, encode_u128, u128);
 
 
 #[test]
@@ -185,4 +218,26 @@ fn test_decode_u32() {
             assert!(rest.is_empty());
         }
     }
+}
+
+
+#[test]
+fn test_delta_encode_u32_slice() {
+    let mut w: Vec<u8> = Vec::new();
+    let r = delta_encode_u32_slice(&[], &mut w);
+    assert!(r.is_ok());
+    assert_eq!(0, r.unwrap());
+    assert!(w.is_empty());
+
+    let mut w: Vec<u8> = Vec::new();
+    let r = delta_encode_u32_slice(&[1, 2, 3], &mut w);
+    assert!(r.is_ok());
+    assert_eq!(3, r.unwrap());
+    assert_eq!(vec![1,1,1], w);
+
+    let mut w: Vec<u8> = Vec::new();
+    let r = delta_encode_u32_slice(&[5, 10, 160], &mut w);
+    assert!(r.is_ok());
+    assert_eq!(4, r.unwrap());
+    assert_eq!(vec![5, 5, 0x96, 0x01], w);
 }
