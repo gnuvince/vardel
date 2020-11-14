@@ -1,3 +1,13 @@
+//! delta-var-int libray
+//!
+//! We use macros to generate the encoder and decoder functions,
+//! because that's much easier than trying to figure out all the right
+//! traits to use.
+//!
+//! We don't provide encoders and decoders for u8: u8s are already one
+//! byte, but it takes two bytes with var-ints to represent the values
+//! from 128 to 255.
+
 use std::fmt;
 use std::error;
 use std::io::{self, Write};
