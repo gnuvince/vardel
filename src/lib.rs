@@ -74,15 +74,19 @@ macro_rules! make_slice_encoder {
     };
 }
 
-pub fn decode_u32(bytes: &[u8]) -> Result<(u32, &[u8]), Error> {
-    let mut x: u32 = 0;
-    for (i, b) in bytes.iter().enumerate() {
-        x |= ((*b & 0x7f) as u32) << (7*i);
-        if *b & 0x80 == 0 {
-            return Ok((x, &bytes[i+1..]));
+macro_rules! make_decoder {
+    ($func_name:ident, $ty:ty) => {
+        pub fn $func_name(bytes: &[u8]) -> Result<($ty, &[u8]), Error> {
+            let mut x: $ty = 0;
+            for (i, b) in bytes.iter().enumerate() {
+                x |= ((*b & 0x7f) as $ty) << (7*i);
+                if *b & 0x80 == 0 {
+                    return Ok((x, &bytes[i+1..]));
+                }
+            }
+            return Err(Error::InvalidVarInt);
         }
-    }
-    return Err(Error::InvalidVarInt);
+    };
 }
 
 pub fn contains_u32(target: u32, mut bytes: &[u8]) -> bool {
@@ -100,10 +104,17 @@ pub fn contains_u32(target: u32, mut bytes: &[u8]) -> bool {
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
 make_encoder!(encode_u64, u64);
+make_encoder!(encode_u128, u128);
+
+make_decoder!(decode_u16, u16);
+make_decoder!(decode_u32, u32);
+make_decoder!(decode_u64, u64);
+make_decoder!(decode_u128, u128);
 
 make_slice_encoder!(encode_u16_slice, encode_u16, u16);
 make_slice_encoder!(encode_u32_slice, encode_u32, u32);
 make_slice_encoder!(encode_u64_slice, encode_u64, u64);
+make_slice_encoder!(encode_u128_slice, encode_u128, u128);
 
 
 #[test]
