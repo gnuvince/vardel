@@ -22,18 +22,12 @@ pub enum Error {
 impl error::Error for Error {
 }
 
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::IoError(err)
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::BufferTooSmall => write!(f, "output buffer is too small"),
             Error::InvalidVarInt => write!(f, "invalid var int: no terminator byte found"),
-            Error::IoError(ref err) => write!(f, "io error: {}", err),
+            Error::IoError(ref e) => write!(f, "io error: {}", e),
         }
     }
 }
@@ -64,7 +58,9 @@ macro_rules! make_slice_encoder {
 
             for x in xs {
                 let n = $single_encoder(*x, &mut buf)?;
-                w.write(&buf[..n])?;
+                if let Err(e) = w.write(&buf[..n]) {
+                    return Err(Error::IoError(e));
+                }
                 total_bytes_written += n;
             }
 
@@ -112,15 +108,13 @@ macro_rules! make_delta_slice_encoder {
             let mut buf: [u8; 24] = [0; 24];
             let mut total_bytes_written: usize = 0;
 
-            if xs.is_empty() {
-                return Ok(total_bytes_written);
-            }
-
             let mut prev = 0;
             for x in xs {
                 let delta = *x - prev;
                 let n = $single_encoder(delta, &mut buf)?;
-                w.write(&buf[..n])?;
+                if let Err(e) = w.write(&buf[..n]) {
+                    return Err(Error::IoError(e));
+                }
                 total_bytes_written += n;
                 prev = *x;
             }
