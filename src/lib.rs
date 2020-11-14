@@ -134,6 +134,22 @@ macro_rules! make_delta_slice_encoder {
     };
 }
 
+macro_rules! make_delta_slice_decoder {
+    ($func_name:ident, $single_decoder:ident, $ty:ty) => {
+        pub fn $func_name(mut bytes: &[u8]) -> Result<Vec<$ty>, Error> {
+            let mut out: Vec<$ty> = Vec::new();
+            let mut prev: $ty = 0;
+            while !bytes.is_empty() {
+                let (delta, rest) = $single_decoder(bytes)?;
+                prev += delta;
+                out.push(prev);
+                bytes = rest;
+            }
+            return Ok(out);
+        }
+    };
+}
+
 make_encoder!(encode_u16, u16);
 make_encoder!(encode_u32, u32);
 make_encoder!(encode_u64, u64);
@@ -158,6 +174,11 @@ make_delta_slice_encoder!(delta_encode_u16_slice, encode_u16, u16);
 make_delta_slice_encoder!(delta_encode_u32_slice, encode_u32, u32);
 make_delta_slice_encoder!(delta_encode_u64_slice, encode_u64, u64);
 make_delta_slice_encoder!(delta_encode_u128_slice, encode_u128, u128);
+
+make_delta_slice_decoder!(delta_decode_u16_slice, decode_u16, u16);
+make_delta_slice_decoder!(delta_decode_u32_slice, decode_u32, u32);
+make_delta_slice_decoder!(delta_decode_u64_slice, decode_u64, u64);
+make_delta_slice_decoder!(delta_decode_u128_slice, decode_u128, u128);
 
 
 #[test]
