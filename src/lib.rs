@@ -1,13 +1,21 @@
 use std::fmt;
 use std::error;
+use std::io::{self, Write};
 
 #[derive(Debug)]
 pub enum Error {
     BufferTooSmall,
     InvalidVarInt,
+    IoError(io::Error),
 }
 
 impl error::Error for Error {
+}
+
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::IoError(err)
+    }
 }
 
 impl fmt::Display for Error {
@@ -15,6 +23,7 @@ impl fmt::Display for Error {
         match *self {
             Error::BufferTooSmall => write!(f, "output buffer is too small"),
             Error::InvalidVarInt => write!(f, "invalid var int: no terminator byte found"),
+            Error::IoError(ref err) => write!(f, "io error: {}", err),
         }
     }
 }
@@ -39,26 +48,28 @@ macro_rules! make_encoder {
 
 macro_rules! make_slice_encoder {
     ($func_name:ident, $single_encoder:ident, $ty:ty) => {
-        pub fn $func_name(xs: &[$ty]) -> Result<Vec<u8>, Error> {
-            let mut out: Vec<u8> = Vec::new();
+        pub fn $func_name<W: Write>(xs: &[$ty], w: &mut W) -> Result<usize, Error> {
             let mut buf: [u8; 16] = [0; 16];
+            let mut total_bytes_written: usize = 0;
 
             if xs.is_empty() {
-                return Ok(out);
+                return Ok(total_bytes_written);
             }
 
             let mut prev = xs[0];
             let n = $single_encoder(prev, &mut buf)?;
-            out.extend_from_slice(&buf[..n]);
+            w.write(&buf[..n])?;
+            total_bytes_written += n;
 
             for x in &xs[1..] {
                 let delta = *x - prev;
                 let n = $single_encoder(delta, &mut buf)?;
-                out.extend_from_slice(&buf[..n]);
+                w.write(&buf[..n])?;
+                total_bytes_written += n;
                 prev = *x;
             }
 
-            return Ok(out);
+            return Ok(total_bytes_written);
         }
     };
 }
@@ -139,17 +150,23 @@ fn test_encode_u32() {
 
 #[test]
 fn test_encode_u32_slice() {
-    let r = encode_u32_slice(&[]);
+    let mut w: Vec<u8> = Vec::new();
+    let r = encode_u32_slice(&[], &mut w);
     assert!(r.is_ok());
-    assert!(r.unwrap().is_empty());
+    assert_eq!(0, r.unwrap());
+    assert!(w.is_empty());
 
-    let r = encode_u32_slice(&[1, 2, 3]);
+    let mut w: Vec<u8> = Vec::new();
+    let r = encode_u32_slice(&[1, 2, 3], &mut w);
     assert!(r.is_ok());
-    assert_eq!(vec![1, 1, 1], r.unwrap());
+    assert_eq!(3, r.unwrap());
+    assert_eq!(vec![1,1,1], w);
 
-    let r = encode_u32_slice(&[5, 10, 160]);
+    let mut w: Vec<u8> = Vec::new();
+    let r = encode_u32_slice(&[5, 10, 160], &mut w);
     assert!(r.is_ok());
-    assert_eq!(vec![5, 5, 0x96, 0x01], r.unwrap());
+    assert_eq!(4, r.unwrap());
+    assert_eq!(vec![5, 5, 0x96, 0x01], w);
 }
 
 #[test]
@@ -173,7 +190,8 @@ fn test_decode_u32() {
 
 #[test]
 fn test_contains_u32() {
-    let v = encode_u32_slice(&[4, 8, 15, 16, 23, 42]).unwrap();
+    let mut v: Vec<u8> = Vec::new();
+    assert!(encode_u32_slice(&[4, 8, 15, 16, 23, 42], &mut v).is_ok());
     assert!(contains_u32(4, &v[..]));
     assert!(contains_u32(8, &v[..]));
     assert!(contains_u32(15, &v[..]));
