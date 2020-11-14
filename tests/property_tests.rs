@@ -18,6 +18,19 @@ proptest! {
 
 proptest! {
     #[test]
+    fn prop_encode_decode_u16_slice(x in any::<Vec<u16>>()) {
+        let mut out: Vec<u8> = Vec::new();
+        let r = vardel::encode_u16_slice(&x[..], &mut out);
+        assert!(r.is_ok());
+        let r2 = vardel::decode_u16_slice(&out);
+        assert!(r2.is_ok());
+        let y = r2.unwrap();
+        assert_eq!(y, x);
+    }
+}
+
+proptest! {
+    #[test]
     fn prop_encode_decode_u32(x in any::<u32>()) {
         let mut out: [u8; 16] = [0_u8; 16];
         let r = vardel::encode_u32(x, &mut out);
@@ -28,6 +41,19 @@ proptest! {
         let (y, rest) = r2.unwrap();
         assert_eq!(y, x);
         assert!(rest.is_empty());
+    }
+}
+
+proptest! {
+    #[test]
+    fn prop_encode_decode_u32_slice(x in any::<Vec<u32>>()) {
+        let mut out: Vec<u8> = Vec::new();
+        let r = vardel::encode_u32_slice(&x[..], &mut out);
+        assert!(r.is_ok());
+        let r2 = vardel::decode_u32_slice(&out);
+        assert!(r2.is_ok());
+        let y = r2.unwrap();
+        assert_eq!(y, x);
     }
 }
 
@@ -48,6 +74,19 @@ proptest! {
 
 proptest! {
     #[test]
+    fn prop_encode_decode_u64_slice(x in any::<Vec<u64>>()) {
+        let mut out: Vec<u8> = Vec::new();
+        let r = vardel::encode_u64_slice(&x[..], &mut out);
+        assert!(r.is_ok());
+        let r2 = vardel::decode_u64_slice(&out);
+        assert!(r2.is_ok());
+        let y = r2.unwrap();
+        assert_eq!(y, x);
+    }
+}
+
+proptest! {
+    #[test]
     fn prop_encode_decode_u128(x in any::<u128>()) {
         let mut out: [u8; 32] = [0_u8; 32];
         let r = vardel::encode_u128(x, &mut out);
@@ -58,5 +97,18 @@ proptest! {
         let (y, rest) = r2.unwrap();
         assert_eq!(y, x);
         assert!(rest.is_empty());
+    }
+}
+
+proptest! {
+    #[test]
+    fn prop_encode_decode_u128_slice(x in any::<Vec<u128>>()) {
+        let mut out: Vec<u8> = Vec::new();
+        let r = vardel::encode_u128_slice(&x[..], &mut out);
+        assert!(r.is_ok());
+        let r2 = vardel::decode_u128_slice(&out);
+        assert!(r2.is_ok());
+        let y = r2.unwrap();
+        assert_eq!(y, x);
     }
 }
