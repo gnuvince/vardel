@@ -21,6 +21,10 @@ use std::io::{self, Write};
 pub enum Error {
     BufferTooSmall,
     InvalidVarInt,
+
+    // vfoley: I don't `impl From<io::Error> for Error` because
+    //   flamegraphs showed that the conversion for using the
+    //   `?` operator took nearly 50% of the encoding time.
     IoError(io::Error),
 }
 
