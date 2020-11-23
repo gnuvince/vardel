@@ -1,10 +1,15 @@
 //! delta-var-int libray
 //!
-//! We use macros to generate the encoder and decoder functions,
+//! This library converts integers, slices of integers, and slices of
+//! ordered integers to be converted to [var-ints], aka leb128.
+//!
+//! [var-int]: https://developers.google.com/protocol-buffers/docs/encoding#varints
+//!
+//! NB: We use macros to generate the encoder and decoder functions,
 //! because that's much easier than trying to figure out all the right
 //! traits to use.
 //!
-//! We don't provide encoders and decoders for u8: u8s are already one
+//! NB: We don't provide encoders and decoders for u8: u8s are already one
 //! byte, but it takes two bytes with var-ints to represent the values
 //! from 128 to 255.
 
@@ -34,6 +39,7 @@ impl fmt::Display for Error {
 
 macro_rules! make_encoder {
     ($func_name:ident, $ty:ty) => {
+        /// Encodes `x` in the `bytes` slice and returns the number of bytes written (or an error).
         pub fn $func_name(mut x: $ty, out: &mut [u8]) -> Result<usize, Error> {
             for (i, byte) in out.iter_mut().enumerate() {
                 // All bytes have MSB == 1...
@@ -52,6 +58,7 @@ macro_rules! make_encoder {
 
 macro_rules! make_slice_encoder {
     ($func_name:ident, $single_encoder:ident, $ty:ty) => {
+        /// Encodes the `xs` to a writer and returns the number of bytes written (or an error).
         pub fn $func_name<W: Write>(xs: &[$ty], w: &mut W) -> Result<usize, Error> {
             let mut buf: [u8; 24] = [0; 24];
             let mut total_bytes_written: usize = 0;
@@ -69,41 +76,12 @@ macro_rules! make_slice_encoder {
     };
 }
 
-macro_rules! make_decoder {
-    ($func_name:ident, $ty:ty) => {
-        /// Decodes a `$ty` from the `bytes` slice and returns the
-        /// value and the part of the slice that wasn't consumed.
-        ///
-        /// Returns an error if a value can't be parsed from `bytes`.
-        pub fn $func_name(bytes: &[u8]) -> Result<($ty, &[u8]), Error> {
-            let mut x: $ty = 0;
-            for (i, b) in bytes.iter().enumerate() {
-                x |= ((*b & 0x7f) as $ty) << (7*i);
-                if *b & 0x80 == 0 {
-                    return Ok((x, &bytes[i+1..]));
-                }
-            }
-            return Err(Error::InvalidVarInt);
-        }
-    };
-}
-
-macro_rules! make_slice_decoder {
-    ($func_name:ident, $decoder:ident, $ty:ty) => {
-        pub fn $func_name(mut bytes: &[u8]) -> Result<Vec<$ty>, Error> {
-            let mut out: Vec<$ty> = Vec::new();
-            while !bytes.is_empty() {
-                let (x, rest) = $decoder(bytes)?;
-                out.push(x);
-                bytes = rest;
-            }
-            return Ok(out);
-        }
-    };
-}
-
 macro_rules! make_delta_slice_encoder {
     ($func_name:ident, $single_encoder:ident, $ty:ty) => {
+        /// Encodes the `xs` to a writer and returns the number of bytes written (or an error).
+        ///
+        /// NB: It's the responsibility of the caller to ensure that `xs` is sorted in
+        /// non-decreasing order.
         pub fn $func_name<W: Write>(xs: &[$ty], w: &mut W) -> Result<usize, Error> {
             let mut buf: [u8; 24] = [0; 24];
             let mut total_bytes_written: usize = 0;
@@ -124,8 +102,44 @@ macro_rules! make_delta_slice_encoder {
     };
 }
 
+macro_rules! make_decoder {
+    ($func_name:ident, $ty:ty) => {
+        /// Decodes an integer from `bytes` and returns the value and the unused portion of `bytes`(or an error).
+        pub fn $func_name(bytes: &[u8]) -> Result<($ty, &[u8]), Error> {
+            let mut x: $ty = 0;
+            for (i, b) in bytes.iter().enumerate() {
+                x |= ((*b & 0x7f) as $ty) << (7*i);
+                if *b & 0x80 == 0 {
+                    return Ok((x, &bytes[i+1..]));
+                }
+            }
+            return Err(Error::InvalidVarInt);
+        }
+    };
+}
+
+macro_rules! make_slice_decoder {
+    ($func_name:ident, $decoder:ident, $ty:ty) => {
+        /// Decodes integers from `bytes` and returns the values in a vector (or an error).
+        ///
+        /// NB: This function allocates.
+        pub fn $func_name(mut bytes: &[u8]) -> Result<Vec<$ty>, Error> {
+            let mut out: Vec<$ty> = Vec::new();
+            while !bytes.is_empty() {
+                let (x, rest) = $decoder(bytes)?;
+                out.push(x);
+                bytes = rest;
+            }
+            return Ok(out);
+        }
+    };
+}
+
 macro_rules! make_delta_slice_decoder {
     ($func_name:ident, $single_decoder:ident, $ty:ty) => {
+        /// Decodes integers from `bytes` and returns the values in a vector (or an error).
+        ///
+        /// NB: This function allocates.
         pub fn $func_name(mut bytes: &[u8]) -> Result<Vec<$ty>, Error> {
             let mut out: Vec<$ty> = Vec::new();
             let mut prev: $ty = 0;
