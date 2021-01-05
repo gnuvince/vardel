@@ -13,8 +13,8 @@
 //! byte, but it takes two bytes with var-ints to represent the values
 //! from 128 to 255.
 
-use std::fmt;
 use std::error;
+use std::fmt;
 use std::io::{self, Write};
 
 #[derive(Debug)]
@@ -28,8 +28,7 @@ pub enum Error {
     IoError(io::Error),
 }
 
-impl error::Error for Error {
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -52,7 +51,7 @@ macro_rules! make_encoder {
                 if x == 0 {
                     // ... except the last byte where MSB == 0.
                     *byte &= 0x7f;
-                    return Ok(i+1);
+                    return Ok(i + 1);
                 }
             }
             return Err(Error::BufferTooSmall);
@@ -112,9 +111,9 @@ macro_rules! make_decoder {
         pub fn $func_name(bytes: &[u8]) -> Result<($ty, &[u8]), Error> {
             let mut x: $ty = 0;
             for (i, b) in bytes.iter().enumerate() {
-                x |= ((*b & 0x7f) as $ty) << (7*i);
+                x |= ((*b & 0x7f) as $ty) << (7 * i);
                 if *b & 0x80 == 0 {
-                    return Ok((x, &bytes[i+1..]));
+                    return Ok((x, &bytes[i + 1..]));
                 }
             }
             return Err(Error::InvalidVarInt);
@@ -188,28 +187,30 @@ make_delta_slice_decoder!(delta_decode_u32_slice, decode_u32, u32);
 make_delta_slice_decoder!(delta_decode_u64_slice, decode_u64, u64);
 make_delta_slice_decoder!(delta_decode_u128_slice, decode_u128, u128);
 
-
 #[test]
 fn test_encode_fail() {
     let mut out: [u8; 1] = [0; 1];
     assert!(matches!(encode_u32(46, &mut out), Ok(1)));
-    assert!(matches!(encode_u32(150, &mut out), Err(Error::BufferTooSmall)));
+    assert!(matches!(
+        encode_u32(150, &mut out),
+        Err(Error::BufferTooSmall)
+    ));
 }
 
 #[test]
 fn test_encode_u16() {
     let mut out: [u8; 16] = [0; 16];
 
-    for i in 0_u16 ..= 127_u16 {
+    for i in 0_u16..=127_u16 {
         assert!(matches!(encode_u16(i, &mut out[..]), Ok(1)));
         assert_eq!(&[i as u8], &out[0..1]);
     }
 
-    for i in 128_u16 ..= 16383_u16 {
+    for i in 128_u16..=16383_u16 {
         assert!(matches!(encode_u16(i, &mut out[..]), Ok(2)));
     }
 
-    for i in 16384_u16 ..= 65535_u16 {
+    for i in 16384_u16..=65535_u16 {
         assert!(matches!(encode_u16(i, &mut out[..]), Ok(3)));
     }
 }
@@ -218,7 +219,7 @@ fn test_encode_u16() {
 fn test_encode_u32() {
     let mut out: [u8; 16] = [0; 16];
 
-    for i in 0_u32 ..= 127_u32 {
+    for i in 0_u32..=127_u32 {
         assert!(matches!(encode_u32(i, &mut out[..]), Ok(1)));
         assert_eq!(&[i as u8], &out[0..1]);
     }
@@ -249,7 +250,6 @@ fn test_decode_u32() {
     }
 }
 
-
 #[test]
 fn test_delta_encode_u32_slice() {
     let mut w: Vec<u8> = Vec::new();
@@ -262,7 +262,7 @@ fn test_delta_encode_u32_slice() {
     let r = delta_encode_u32_slice(&[1, 2, 3], &mut w);
     assert!(r.is_ok());
     assert_eq!(3, r.unwrap());
-    assert_eq!(vec![1,1,1], w);
+    assert_eq!(vec![1, 1, 1], w);
 
     let mut w: Vec<u8> = Vec::new();
     let r = delta_encode_u32_slice(&[5, 10, 160], &mut w);
